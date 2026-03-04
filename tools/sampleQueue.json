@@ -1,0 +1,14 @@
+{
+  "leaders": ["Randall", "Eduardo", "Jorge", "Gabriel"],
+  "queue": [
+    {"displayName": "Randall", "status": "available", "queueOrder": 1, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Eduardo", "status": "available", "queueOrder": 2, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Jorge", "status": "available", "queueOrder": 3, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Gabriel", "status": "available", "queueOrder": 4, "boostMode": "double", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Marianela", "status": "available", "queueOrder": 5, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Gerald", "status": "available", "queueOrder": 6, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Cristian", "status": "available", "queueOrder": 7, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Valery", "status": "available", "queueOrder": 8, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"},
+    {"displayName": "Allan", "status": "available", "queueOrder": 9, "boostMode": "normal", "lastUpdatedUtc": "1970-01-01T00:00:00Z"}
+  ]
+}

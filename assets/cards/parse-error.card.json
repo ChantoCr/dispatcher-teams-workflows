@@ -1,0 +1,9 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.4",
+  "body": [
+    {"type": "TextBlock", "weight": "Bolder", "text": "❌ Formato inválido"},
+    {"type": "TextBlock", "text": "Usa: /next df \"nombre de la tarea\"", "wrap": true}
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "$schema": "http://adaptivecards.io/schemas/adaptive-card.json",
+  "type": "AdaptiveCard",
+  "version": "1.4",
+  "body": [
+    {"type": "TextBlock", "weight": "Bolder", "text": "⛔ Acción no permitida"},
+    {"type": "TextBlock", "text": "No tienes permiso para usar /next.", "wrap": true}
+  ]
+}
