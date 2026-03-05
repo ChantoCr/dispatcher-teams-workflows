@@ -8,7 +8,7 @@ Este repo implementa tres flujos:
 
 1. **Flow A (`/next`, `/help`)**
    - Solo líderes pueden pedir la siguiente asignación.
-   - Toma configuración dinámica desde `ConfigTable` (líderes, TTL lock, canal, tags permitidos, help).
+   - Toma configuración dinámica desde `ConfigTable` (líderes, TTL lock, allow-list de chats, tags permitidos, help).
    - Valida tags estrictamente (`df`, `dl`, `inv`, `act`, `all`).
    - Usa lock con retry (2 intentos con delay de 2s).
    - Siempre registra auditoría (`AuditTable`) en éxito y error.
@@ -32,7 +32,7 @@ Este repo implementa tres flujos:
 
 ## Arquitectura
 
-`Teams (canal dispatch) -> Power Automate Workflows -> Excel Online (dispatcher.xlsx) -> Teams (respuesta)`
+`Teams Chat (Dispatcher Testing) -> Power Automate Workflows -> Excel Online (dispatcher.xlsx) -> Teams Chat`
 
 ## Requisitos
 
@@ -48,9 +48,20 @@ Este repo implementa tres flujos:
 3. [docs/03_SETUP_WORKFLOWS_FLOW_A_NEXT.md](docs/03_SETUP_WORKFLOWS_FLOW_A_NEXT.md)
 4. [docs/04_SETUP_WORKFLOWS_FLOW_B_STATUS.md](docs/04_SETUP_WORKFLOWS_FLOW_B_STATUS.md)
 5. [docs/06_SETUP_WORKFLOWS_FLOW_C_ADMIN.md](docs/06_SETUP_WORKFLOWS_FLOW_C_ADMIN.md)
-6. [docs/05_TEST_PLAN.md](docs/05_TEST_PLAN.md)
-7. [docs/07_SECURITY_AND_GOVERNANCE.md](docs/07_SECURITY_AND_GOVERNANCE.md)
-8. [docs/08_OPERATIONS_RUNBOOK.md](docs/08_OPERATIONS_RUNBOOK.md)
+6. [docs/09_GET_CHAT_ID.md](docs/09_GET_CHAT_ID.md)
+7. [docs/05_TEST_PLAN.md](docs/05_TEST_PLAN.md)
+8. [docs/07_SECURITY_AND_GOVERNANCE.md](docs/07_SECURITY_AND_GOVERNANCE.md)
+9. [docs/08_OPERATIONS_RUNBOOK.md](docs/08_OPERATIONS_RUNBOOK.md)
+
+## Chat allow-list
+
+Config en `ConfigTable`:
+- `allowedChatIdsCsv`: ids de chat permitidos, separados por coma.
+- `enforceChatAllowList`: `true` o `false`.
+
+Regla:
+- Si `enforceChatAllowList=true`, el flujo procesa solo chats permitidos.
+- Si el chat no está permitido, termina silencioso (o solo deja log `wrong-chat`).
 
 ## Comandos disponibles
 
@@ -74,3 +85,11 @@ Ejemplos completos: [assets/examples/commands.md](assets/examples/commands.md)
 - Excel no es transaccional; el lock reduce colisiones, no reemplaza una BD ACID.
 - Los nombres en Teams deben coincidir con `displayName` de `QueueTable`.
 - Adaptive Cards son opcionales; texto plano cubre todo.
+
+## Checklist rápido de pruebas
+
+- `/help` responde en `Dispatcher Testing`.
+- `/next` solo funciona para líderes.
+- `busy -> /available` respeta `boostMode` (normal final, double centro).
+- `queueOrder` siempre termina en 1..N.
+- `enforceChatAllowList=true` bloquea chats no permitidos.

@@ -1,5 +1,7 @@
 # Comandos de ejemplo
 
+> Envía estos comandos en el chat de pruebas **Dispatcher Testing** (chat permitido en allow-list).
+
 ## Asignación
 - `/next "Revisar folio 1001"`
 - `/next df "Validar transferencia internacional"`
@@ -24,5 +26,5 @@
 - `/admin boost "Ana" double`
 - `/admin boost "Ana" normal`
 - `/admin reset`
-- `/admin leaders set "Randall,Eduardo,Jorge"`
+- `/admin leaders set "Randall,Eduardo,Jorge,Gabriel"`
 - `/admin config show`

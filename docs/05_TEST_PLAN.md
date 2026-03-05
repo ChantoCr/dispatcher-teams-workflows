@@ -1,9 +1,10 @@
-# 05 - Test Plan (PR#2)
+# 05 - Test Plan (PR#3 chat)
 
 ## Pre-check
 - `dispatcher.xlsx` con `QueueTable`, `LockTable`, `ConfigTable`, `AuditTable`.
 - Flows A/B/C activos.
-- Canal operativo coincide con `ConfigTable.allowedChannel`.
+- Probar dentro del chat **Dispatcher Testing**.
+- `ConfigTable.enforceChatAllowList=true` y chat id presente en `allowedChatIdsCsv`.
 
 ## Casos (20)
 1. `/next "Caso 001"` por líder -> asigna y marca busy.
@@ -27,13 +28,19 @@
 19. `/admin add "Nuevo"` y `/admin remove "Nuevo"`.
 20. `/admin leaders set "A,B"` y `/admin config show`.
 
+## Casos chat allow-list (nuevos)
+- Chat permitido + `enforceChatAllowList=true`: comandos funcionan.
+- Chat NO permitido + `enforceChatAllowList=true`: termina silencioso (o solo log `wrong-chat`).
+- `enforceChatAllowList=false`: permite pruebas en cualquier chat.
+
 ## Verificación de auditoría
-Para cada caso, validar fila en `AuditTable`:
+Para cada caso reconocido, validar fila en `AuditTable`:
 - `eventType` correcto
 - `actor` correcto
-- `details` con motivo/resultados
+- `details` con motivo/resultados (`assigned`, `wrong-chat`, `queue`, etc.)
 - `timestampUtc` ISO UTC
 
 ## Resultado esperado
-- 20/20 casos pasan.
-- No quedan locks pegados (`lockUntilUtc` reset al epoch tras ejecución).
+- Casos funcionales pasan en chat permitido.
+- No hay respuestas en chats no permitidos cuando enforcement está activo.
+- No quedan locks pegados (`lockUntilUtc` vuelve a epoch).

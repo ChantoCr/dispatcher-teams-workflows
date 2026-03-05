@@ -1,20 +1,47 @@
 # 06 - Setup Workflows Flow C (`/admin ...`)
 
 ## Objetivo
-Permitir mantenimiento operativo de la cola desde Teams, solo para líderes definidos en `ConfigTable.leadersCsv`.
+Permitir mantenimiento operativo desde chat de Teams, solo para líderes (`ConfigTable.leadersCsv`) y con allow-list de chat.
 
 ## Trigger
-- Microsoft Teams -> `When a new channel message is added`
+- Microsoft Teams -> `When a new message is added in a chat`
 - Procesar solo si `startsWith(toLower(trim(vText)), '/admin')`.
 
-## Validación de líder
+## Variables iniciales
+- `vText`, `vSender`, `vNow`
+- `vChatId` (id del chat/conversación)
+
+## 1) Cargar ConfigTable primero
+- `vLeadersCsv`
+- `vAllowedChatIdsCsv`
+- `vEnforceChatAllowList`
+- `vLockTtlSeconds`
+- `vAllowedTagsCsv`
+
+## 2) Enforce chat allow-list
+```text
+and(
+  equals(toLower(vEnforceChatAllowList), 'true'),
+  not(contains(concat(',', toLower(vAllowedChatIdsCsv), ','), concat(',', toLower(vChatId), ',')))
+)
+```
+
+Si TRUE:
+- Terminate silencioso, o
+- Log `ADMIN` con `details=wrong-chat` y Terminate.
+
+## 3) Validación de líder
 ```text
 contains(concat(',', toLower(vLeadersCsv), ','), concat(',', toLower(vSender), ','))
 ```
-Si false -> responder `⛔ No autorizado.` + log ADMIN error.
 
-## Parseo base
-Usa comandos exactos:
+Si false:
+- Responder `⛔ No autorizado.`
+- Log `ADMIN` details=`unauthorized`
+- Terminate.
+
+## 4) Parseo base
+Comandos exactos:
 - `/admin add "Nombre"`
 - `/admin remove "Nombre"`
 - `/admin boost "Nombre" normal|double`
@@ -22,38 +49,39 @@ Usa comandos exactos:
 - `/admin leaders set "csv"`
 - `/admin config show`
 
-## Acciones
-### 1) add
-- Validar que no exista `displayName`.
+## 5) Acciones
+### add
+- Validar que `displayName` no exista.
 - `queueOrder = max(queueOrder)+1`
 - `status=available`, `boostMode=normal`, `lastUpdatedUtc=utcNow()`.
 - Reply OK + log ADMIN.
 
-### 2) remove
-- Buscar por nombre y eliminar fila.
+### remove
+- Buscar nombre y eliminar fila.
 - Renumerar `queueOrder` 1..N.
 - Reply OK + log ADMIN.
 
-### 3) boost
+### boost
 - Actualizar `boostMode` a `normal|double`.
 - Reply OK + log ADMIN.
 
-### 4) reset
-- Reordenar por `queueOrder` actual y escribir 1..N.
+### reset
+- Reordenar por `queueOrder` y escribir 1..N.
 - Mantener `status` y `boostMode`.
 - Reply OK + log ADMIN.
 
-### 5) leaders set
+### leaders set
 - Update `ConfigTable.leadersCsv` con CSV indicado.
 - Reply OK + log ADMIN.
 
-### 6) config show
-- Responder valores actuales:
-  - leadersCsv
-  - lockTtlSeconds
-  - allowedChannel
-  - allowedTagsCsv
-- Log ADMIN details=`config-show`.
+### config show
+- Responder:
+  - `leadersCsv`
+  - `lockTtlSeconds`
+  - `allowedChatIdsCsv`
+  - `enforceChatAllowList`
+  - `allowedTagsCsv`
+- Log `ADMIN` details=`config-show`.
 
 ## Respuestas sugeridas
 - OK: `✅ Admin aplicado: <acción>`
@@ -65,3 +93,7 @@ Cada rama escribe en `AuditTable`:
 - `actor=vSender`
 - `target` según comando
 - `details` con acción y resultado
+
+## Ejemplos de respuesta
+- Éxito: `✅ Admin aplicado: boost "Randall" double`
+- Error: `❌ Admin error: usuario no existe en QueueTable`

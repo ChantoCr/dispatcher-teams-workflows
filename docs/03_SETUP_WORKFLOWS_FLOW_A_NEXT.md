@@ -1,21 +1,20 @@
 # 03 - Setup Workflows Flow A (`/next`, `/help`)
 
 ## Objetivo
-Atender `/next`, `/next help` y `/help`, con lock robusto, tags estrictos, config dinámica y auditoría en todas las salidas.
+Atender `/next`, `/next help` y `/help` en chat de Teams, con lock robusto, tags estrictos, allow-list de chat y auditoría.
 
 ## Trigger
-- Microsoft Teams -> `When a new channel message is added`
-- Team: `<TU TEAM>`
-- Channel: usa el canal de operación (ej. `dispatch`)
+- Microsoft Teams -> `When a new message is added in a chat`
+- Chat: selecciona el chat de pruebas (ej. `Dispatcher Testing`).
 
 ## Variables iniciales
 1. `vText` (String) = texto del mensaje
 2. `vSender` (String) = display name remitente
 3. `vNow` (String) = `utcNow()`
-4. `vLockAcquired` (Boolean) = `false`
-5. `vFailReason` (String) = `''`
+4. `vChatId` (String) = id del chat/conversación del trigger
+5. `vLockAcquired` (Boolean) = `false`
 
-## Cargar ConfigTable (sin hardcode)
+## 1) Cargar ConfigTable primero
 1. List rows -> `ConfigTable`
 2. Compose `cConfigRow`:
 ```text
@@ -26,15 +25,32 @@ first(body('List_rows_ConfigTable')?['value'])
 - `vAllowedTagsCsv` = `toLower(outputs('cConfigRow')?['allowedTagsCsv'])`
 - `vHelpText` = `outputs('cConfigRow')?['helpText']`
 - `vLockTtlSeconds` = `int(outputs('cConfigRow')?['lockTtlSeconds'])`
+- `vAllowedChatIdsCsv` = `toLower(outputs('cConfigRow')?['allowedChatIdsCsv'])`
+- `vEnforceChatAllowList` = `toLower(outputs('cConfigRow')?['enforceChatAllowList'])`
 
-## Detectar comando
+## 2) Enforce chat allow-list
+Condición principal:
+```text
+and(
+  equals(variables('vEnforceChatAllowList'), 'true'),
+  not(contains(concat(',', variables('vAllowedChatIdsCsv'), ','), concat(',', toLower(variables('vChatId')), ',')))
+)
+```
+
+Si TRUE (chat no permitido):
+- Opción silenciosa: `Terminate` sin responder.
+- Opción recomendada para soporte: log `ASSIGN_FAIL` con `details=wrong-chat` y luego `Terminate`.
+
+## 3) Detectar comando
 `vTextLower = toLower(trim(variables('vText')))`
 
-- Si inicia con `/help` o es `/next help`: responder `vHelpText`, log `ASSIGN_FAIL` con details=`help-request`, terminar.
-- Si no inicia con `/next`: Terminate.
+- Si inicia con `/help` o es `/next help`:
+  - Responder `vHelpText`
+  - Log `ASSIGN_FAIL` con `details=help-request`
+  - Terminate.
+- Si no inicia con `/next`: `Terminate`.
 
-## Validar líder
-Expresión:
+## 4) Validar líder
 ```text
 contains(concat(',', toLower(variables('vLeadersCsv')), ','), concat(',', toLower(variables('vSender')), ','))
 ```
@@ -44,11 +60,11 @@ Si false:
 - Log `ASSIGN_FAIL` details=`unauthorized`
 - Terminate.
 
-## Parse de `/next`
+## 5) Parse de `/next`
 - `vFirstQuote = indexOf(variables('vText'), '"')`
 - `vLastQuote = lastIndexOf(variables('vText'), '"')`
 
-Condición error:
+Error de parse:
 ```text
 or(equals(variables('vFirstQuote'), -1), equals(variables('vLastQuote'), variables('vFirstQuote')))
 ```
@@ -64,66 +80,54 @@ Extraer:
 - `vTagsRaw = toLower(trim(variables('vPrefix')))`
 - `vTags = if(equals(variables('vTagsRaw'), ''), createArray(), split(variables('vTagsRaw'), ' '))`
 
-## Validación estricta de tags
+## 6) Validación estricta de tags
 - Si `length(vTags)=0`: OK.
 - Si contiene `all`: forzar `vTags=["all"]`.
-- Si no contiene `all`: para cada tag no vacío validar contra `vAllowedTagsCsv`.
+- Si no contiene `all`: validar cada tag no vacío con:
 
-Validación por tag:
 ```text
 contains(concat(',', variables('vAllowedTagsCsv'), ','), concat(',', item(), ','))
 ```
 
-Si alguno inválido:
+Si inválido:
 - Responder `❌ Tags inválidos. Usa: df dl inv act all`
 - Log `ASSIGN_FAIL` details=`invalid-tags`
 - Terminate.
 
-## Lock robusto con retry (2x, 2s)
-Intento 1:
-1. Leer `LockTable`.
-2. `vLockUntil = coalesce(lockUntilUtc, '1970-01-01T00:00:00Z')`
-3. Libre si:
-```text
-greaterOrEquals(ticks(variables('vNow')), ticks(variables('vLockUntil')))
-```
-4. Si libre -> Update lock (`lockOwner=vSender`, `lockUntilUtc=addSeconds(vNow,vLockTtlSeconds)`, `lockRowVersion+1`) y `vLockAcquired=true`.
-
-Si ocupado:
-- `Delay` 2s y repetir intento (hasta 2 reintentos).
-- Si sigue ocupado al final:
+## 7) Lock con retry (2 reintentos, delay 2s)
+- Intento inicial + 2 reintentos.
+- Si lock activo: `Delay` 2s y reintentar.
+- Si no se adquiere:
   - Responder `⏳ Bot ocupado, intenta de nuevo`
   - Log `ASSIGN_FAIL` details=`lock-busy-after-retry`
   - Terminate.
 
-## Selección y asignación
+## 8) Selección y asignación
 1. List rows `QueueTable`
 2. Filtrar `status=available`
 3. Si vacío:
    - Responder `⚠️ No hay agentes disponibles en este momento.`
    - Log `ASSIGN_FAIL` details=`no-available`
-   - Ir a bloque Finally.
-4. Elegir menor `queueOrder`
-5. Update row seleccionado:
+   - Continuar a Finally.
+4. Elegir menor `queueOrder`.
+5. Update row:
    - `status=busy`
    - `lastUpdatedUtc=vNow`
-6. Responder:
+6. Responder éxito:
 ```text
 ✅ Asignado a: {vSelectedName} | 📌 {vTaskName}
 ```
 7. Log `ASSIGN_OK` (`actor=vSender`, `target=vSelectedName`, `taskName=vTaskName`, `tags=join(vTags,',')`, `details=assigned`).
 
-## Finally pattern (release lock SIEMPRE)
-Agrega un Scope `Finally_ReleaseLock` configurado para ejecutarse **siempre** (success, fail, timeout, skipped del scope principal):
-- Si `vLockAcquired=true`, actualizar `LockTable`:
-  - `lockOwner=''`
-  - `lockUntilUtc='1970-01-01T00:00:00Z'`
-  - `lockRowVersion+1`
+## 9) Finally_ReleaseLock (siempre)
+Crea Scope `Finally_ReleaseLock` con **Run After: succeeded, failed, skipped, timed out** del Scope principal.
 
-## Respuestas estándar
-- Éxito: `✅ Asignado a: ...`
-- No autorizado: `⛔ ...`
-- Parse error: `Formato inválido...`
-- Tags inválidos: `❌ Tags inválidos...`
-- Lock ocupado: `⏳ Bot ocupado...`
-- Sin disponibles: `⚠️ No hay agentes disponibles...`
+Si `vLockAcquired=true`, actualizar `LockTable`:
+- `lockOwner=''`
+- `lockUntilUtc='1970-01-01T00:00:00Z'`
+- `lockRowVersion+1`
+
+## Ejemplos de respuesta
+- Éxito: `✅ Asignado a: Randall | 📌 Validar transferencia`
+- Error no autorizado: `⛔ No tienes permiso para asignar tareas.`
+- Error de tags: `❌ Tags inválidos. Usa: df dl inv act all`
