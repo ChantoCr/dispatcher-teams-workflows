@@ -1,22 +1,27 @@
-# 01 - Setup Teams
+# 01 - Setup Teams (Chat de prueba)
 
 ## Objetivo
-Configurar Teams para que los comandos del dispatcher se usen de forma consistente y segura.
+Configurar un chat de Teams (1:1 o grupal) para operar el dispatcher **sin canales**.
 
 ## Paso a paso
 
-1. En tu Team, crea (o reutiliza) el canal **`dispatch`**.
-2. Define como regla operativa: **los comandos del bot solo se envían en este canal**.
-3. Publica y fija (Pin) un mensaje guía con formato de comandos.
+1. En Microsoft Teams, crea un chat grupal llamado **`Dispatcher Testing`**.
+2. Agrega al menos a:
+   - Líderes: Randall, Eduardo, Jorge, Gabriel.
+   - Agentes: Randall, Eduardo, Jorge, Gabriel, Marianela, Gerald, Cristian, Valery, Allan.
+3. Define la regla operativa: **todos los comandos del dispatcher se envían solo en este chat**.
+4. Fija (Pin) un mensaje guía con comandos.
+5. (Recomendado) Desactiva respuestas fuera del tema para evitar ruido durante pruebas.
 
-## Mensaje recomendado para pin
+## Mensaje recomendado para pin (copiar/pegar)
 
 ```text
-Comandos del dispatcher (solo en este canal):
+Comandos del dispatcher (solo en este chat: Dispatcher Testing):
 
 Líderes:
 /next [tags] "nombre de la tarea"
 Ejemplo: /next df urgent "Validar transferencia"
+/admin config show
 
 Agentes:
 /available
@@ -25,9 +30,14 @@ Agentes:
 /lunch
 /offline
 /status
+/queue
+/who
+/help
 ```
 
-## Recomendaciones
+## Reglas recomendadas para pruebas con tu jefe
 
-- Evita usar hilos diferentes para comandos automáticos.
-- Mantén nombres de displayName en Teams alineados con Excel (`QueueTable.displayName`).
+- Usar siempre el mismo chat para toda la sesión de pruebas.
+- Si crean un chat nuevo, actualizar `ConfigTable.allowedChatIdsCsv` antes de seguir.
+- No mezclar comandos productivos en otros chats.
+- Mantener `displayName` de Teams igual a `QueueTable.displayName` en Excel.

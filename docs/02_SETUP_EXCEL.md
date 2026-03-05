@@ -32,16 +32,17 @@ Valores iniciales:
 - `lockUntilUtc` = `"1970-01-01T00:00:00Z"`
 - `lockRowVersion` = `1`
 
-## 3) ConfigTable (NUEVO PR#2)
+## 3) ConfigTable
 
 > Debe tener **una sola fila activa**.
 
 ### Columnas exactas
 1. `leadersCsv` (Text) -> `Randall,Eduardo,Jorge,Gabriel`
 2. `lockTtlSeconds` (Number) -> `20`
-3. `allowedChannel` (Text) -> `dispatch`
-4. `allowedTagsCsv` (Text) -> `df,dl,inv,act,all`
-5. `helpText` (Text) -> texto corto multi-línea, por ejemplo:
+3. `allowedChatIdsCsv` (Text) -> `19:abc123@thread.v2,19:def456@thread.v2`
+4. `enforceChatAllowList` (Text) -> `true`
+5. `allowedTagsCsv` (Text) -> `df,dl,inv,act,all`
+6. `helpText` (Text) -> texto corto multi-línea, por ejemplo:
 
 ```text
 Comandos:
@@ -51,7 +52,7 @@ Comandos:
 /admin config show (solo líderes)
 ```
 
-## 4) AuditTable (NUEVO PR#2)
+## 4) AuditTable
 
 ### Columnas exactas
 1. `timestampUtc` (Text)
@@ -74,3 +75,4 @@ Comandos:
 - Todas deben ser **Excel Tables** reales (Insert > Table).
 - Evita encabezados con espacios extra.
 - `displayName` debe coincidir exactamente con el nombre visible en Teams.
+- `enforceChatAllowList` acepta `true` o `false` (texto en minúsculas recomendado).
