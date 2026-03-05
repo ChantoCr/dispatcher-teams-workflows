@@ -1,24 +1,28 @@
 # Comandos de ejemplo
 
-## Válidos
-
+## Asignación
 - `/next "Revisar folio 1001"`
-- `/next df urgent "Validar transferencia internacional"`
+- `/next df "Validar transferencia internacional"`
+- `/next inv act "Llamar cliente"`
+- `/next all "Atender backlog"`
+- `/next help`
+
+## Estado
 - `/available`
 - `/busy`
 - `/break`
 - `/lunch`
 - `/offline`
 - `/status`
+- `/queue`
+- `/who`
+- `/help`
 
-## No válidos
-
-- `/next Revisar folio 1001` (faltan comillas)
-- `/next` (faltan datos)
-- `/nxt "algo"` (comando incorrecto)
-
-## Respuestas esperadas (resumen)
-
-- Asignación OK: `✅ Asignado a: Nombre | 📌 Tarea`
-- No autorizado: `⛔ No tienes permiso para asignar tareas.`
-- Parse error: `Formato inválido. Usa: /next df "nombre de la tarea"`
+## Admin (solo líderes)
+- `/admin add "Ana"`
+- `/admin remove "Ana"`
+- `/admin boost "Ana" double`
+- `/admin boost "Ana" normal`
+- `/admin reset`
+- `/admin leaders set "Randall,Eduardo,Jorge"`
+- `/admin config show`

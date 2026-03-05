@@ -1,52 +1,39 @@
-# 05 - Test Plan
-
-## Objetivo
-Validar funcionalidad completa de Flow A y Flow B con casos felices y errores.
+# 05 - Test Plan (PR#2)
 
 ## Pre-check
+- `dispatcher.xlsx` con `QueueTable`, `LockTable`, `ConfigTable`, `AuditTable`.
+- Flows A/B/C activos.
+- Canal operativo coincide con `ConfigTable.allowedChannel`.
 
-- Canal `dispatch` creado.
-- Excel `dispatcher.xlsx` con `QueueTable` y `LockTable`.
-- Flows activos y apuntando a team/channel correctos.
+## Casos (20)
+1. `/next "Caso 001"` por líder -> asigna y marca busy.
+2. `/next df "Caso 002"` -> asigna con tag válido.
+3. `/next act inv "Caso 003"` -> múltiples tags válidos.
+4. `/next all "Caso 004"` -> normaliza tags a `all`.
+5. `/next foo "Caso 005"` -> error tags inválidos.
+6. `/next Caso 006` (sin comillas) -> parse error.
+7. `/next` por no líder -> unauthorized.
+8. Lock ocupado intento 1 y libera en retry 1 -> éxito.
+9. Lock ocupado intento 1 y 2, libre en 3 -> éxito.
+10. Lock ocupado permanente -> `⏳ Bot ocupado...`.
+11. Sin disponibles -> `⚠️ No hay agentes disponibles...`.
+12. `/help` -> retorna `helpText`.
+13. `/next help` -> retorna `helpText`.
+14. `/status` -> devuelve estado + queueOrder + boost.
+15. `/queue` -> lista completa ordenada.
+16. `/who` -> solo disponibles ordenados.
+17. `busy -> /available` con `normal` -> reinserta final.
+18. `busy -> /available` con `double` -> reinserta centro.
+19. `/admin add "Nuevo"` y `/admin remove "Nuevo"`.
+20. `/admin leaders set "A,B"` y `/admin config show`.
 
-## Casos
+## Verificación de auditoría
+Para cada caso, validar fila en `AuditTable`:
+- `eventType` correcto
+- `actor` correcto
+- `details` con motivo/resultados
+- `timestampUtc` ISO UTC
 
-1. **/next exitoso (líder)**
-   - Input: `/next df "Auditar caso 001"`
-   - Esperado: asigna mínimo `queueOrder` disponible y lo marca `busy`.
-
-2. **/next no autorizado**
-   - Input por no-líder.
-   - Esperado: `⛔ No tienes permiso para asignar tareas.`
-
-3. **/next parse error**
-   - Input: `/next df Auditar caso 001`
-   - Esperado: `Formato inválido...`
-
-4. **Sin disponibles**
-   - Todos en `busy`/`offline`.
-   - Esperado: mensaje de no disponibles.
-
-5. **Lock activo**
-   - Simular `lockUntilUtc` futuro.
-   - Esperado: `⏳ Bot ocupado, intenta de nuevo`.
-
-6. **Cambio a /busy**
-   - Esperado: estado actualizado y timestamp.
-
-7. **busy -> /available con boostMode normal**
-   - Esperado: reinserción al final + renumeración 1..N.
-
-8. **busy -> /available con boostMode double**
-   - Esperado: reinserción al centro + renumeración 1..N.
-
-9. **/status**
-   - Esperado: devuelve estado actual sin modificar queue.
-
-## Validación local opcional
-
-Usa simulador en `tools/simulate.js`.
-
-```bash
-node tools/simulate.js
-```
+## Resultado esperado
+- 20/20 casos pasan.
+- No quedan locks pegados (`lockUntilUtc` reset al epoch tras ejecución).

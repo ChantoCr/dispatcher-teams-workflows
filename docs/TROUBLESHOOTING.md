@@ -1,26 +1,27 @@
 # Troubleshooting
 
-## El flow no se dispara
-
-- Verifica Team y Channel en trigger.
-- Confirma que el mensaje llega al canal `dispatch` y no a chat privado.
-
-## Error del conector Excel
-
-- Revisa permisos sobre `dispatcher.xlsx`.
-- Confirma que las tablas son Excel Tables reales.
-
-## No encuentra filas en QueueTable
-
-- Verifica nombre exacto de tabla: `QueueTable`.
-- Verifica `displayName` coincide exactamente con Teams display name.
+## Error al actualizar fila de Excel (`Update a row`)
+- Verifica que uses el `id` correcto devuelto por `List rows`.
+- Confirma que la tabla no cambió de nombre (`QueueTable`, `LockTable`, etc.).
+- Si el archivo está abierto con edición pesada, cierra sesiones y reintenta.
 
 ## Lock se queda pegado
+- Revisa que exista Scope `Finally_ReleaseLock` con Run After en success/fail/timeout/skipped.
+- Corrige manualmente `LockTable.lockUntilUtc` a `1970-01-01T00:00:00Z`.
+- Revisa `lockTtlSeconds` en `ConfigTable` (ej. 20).
 
-- Revisa paso de release lock al final y en ramas de error.
-- Corrige manualmente `lockUntilUtc` a `1970-01-01T00:00:00Z` si se atora.
+## `displayName` no coincide
+- Teams puede mostrar variantes de nombre.
+- Copia exactamente el display name del mensaje Teams y actualiza `QueueTable.displayName`.
 
-## queueOrder inconsistente
+## `/next` falla por tags
+- Revisa `ConfigTable.allowedTagsCsv`.
+- Debe estar en minúsculas y separado por coma: `df,dl,inv,act,all`.
 
-- Ejecuta la rutina de normalización 1..N después de reinserción.
-- Evita ediciones manuales concurrentes en Excel durante pruebas.
+## `/admin` devuelve no autorizado
+- Revisa `ConfigTable.leadersCsv`.
+- Evita espacios extra, o usa trim en comparación.
+
+## `/queue` o `/who` desordenado
+- Ejecuta `/admin reset` para normalizar `queueOrder`.
+- Evita ediciones manuales concurrentes en Excel durante operación.

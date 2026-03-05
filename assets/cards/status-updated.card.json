@@ -1,0 +1,1 @@
+{"type":"AdaptiveCard","version":"1.4","body":[{"type":"TextBlock","text":"✅ Estado actualizado"},{"type":"TextBlock","wrap":true,"text":"${statusMessage}"}]}
