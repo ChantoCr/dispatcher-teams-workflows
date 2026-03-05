@@ -1,0 +1,1 @@
+{"type":"AdaptiveCard","version":"1.4","body":[{"type":"TextBlock","weight":"Bolder","text":"Ayuda Dispatcher"},{"type":"TextBlock","wrap":true,"text":"${helpText}"}]}

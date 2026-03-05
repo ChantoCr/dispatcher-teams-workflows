@@ -1,56 +1,76 @@
 # 02 - Setup Excel
 
-## Archivo
-Crea `dispatcher.xlsx` en OneDrive/SharePoint accesible por el conector Excel Online (Business).
+Crea `dispatcher.xlsx` en OneDrive/SharePoint accesible por Excel Online (Business).
 
----
-
-## Tabla obligatoria: QueueTable
+## 1) QueueTable
 
 ### Columnas exactas
-
 1. `displayName` (Text)
 2. `status` (Text)
 3. `queueOrder` (Number)
 4. `boostMode` (Text)
 5. `lastUpdatedUtc` (Text)
 
-### Filas iniciales (orden exacto)
+### Filas iniciales sugeridas
+Randall, Eduardo, Jorge, Gabriel, Marianela, Gerald, Cristian, Valery, Allan.
 
-1. Randall
-2. Eduardo
-3. Jorge
-4. Gabriel
-5. Marianela
-6. Gerald
-7. Cristian
-8. Valery
-9. Allan
-
-### Valores sugeridos de arranque
-
+Valores iniciales:
 - `status`: `available`
-- `queueOrder`: 1..9 según orden anterior
-- `boostMode`: `normal` (puedes poner `double` a quien aplique)
+- `queueOrder`: 1..N
+- `boostMode`: `normal`
 - `lastUpdatedUtc`: `1970-01-01T00:00:00Z`
 
----
-
-## Tabla obligatoria: LockTable
+## 2) LockTable
 
 ### Columnas exactas
-
 1. `lockOwner` (Text)
 2. `lockUntilUtc` (Text)
 3. `lockRowVersion` (Number)
 
-### Fila inicial única
-
+### Fila única inicial
 - `lockOwner` = `""`
 - `lockUntilUtc` = `"1970-01-01T00:00:00Z"`
 - `lockRowVersion` = `1`
 
+## 3) ConfigTable (NUEVO PR#2)
+
+> Debe tener **una sola fila activa**.
+
+### Columnas exactas
+1. `leadersCsv` (Text) -> `Randall,Eduardo,Jorge,Gabriel`
+2. `lockTtlSeconds` (Number) -> `20`
+3. `allowedChannel` (Text) -> `dispatch`
+4. `allowedTagsCsv` (Text) -> `df,dl,inv,act,all`
+5. `helpText` (Text) -> texto corto multi-línea, por ejemplo:
+
+```text
+Comandos:
+/next [df dl inv act all] "tarea"
+/status | /available | /busy | /break | /lunch | /offline
+/queue | /who | /help
+/admin config show (solo líderes)
+```
+
+## 4) AuditTable (NUEVO PR#2)
+
+### Columnas exactas
+1. `timestampUtc` (Text)
+2. `eventType` (Text)
+3. `actor` (Text)
+4. `target` (Text)
+5. `taskName` (Text)
+6. `tags` (Text)
+7. `details` (Text)
+
+### Valores de `eventType`
+- `ASSIGN_OK`
+- `ASSIGN_FAIL`
+- `STATUS_CHANGE`
+- `STATUS_QUERY`
+- `ADMIN`
+
 ## Notas importantes
 
-- Ambas tablas deben ser **Excel Table** (Insert > Table), no solo rango.
-- El Flow A asume que LockTable tiene una sola fila.
+- Todas deben ser **Excel Tables** reales (Insert > Table).
+- Evita encabezados con espacios extra.
+- `displayName` debe coincidir exactamente con el nombre visible en Teams.

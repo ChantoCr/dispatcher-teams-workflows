@@ -1,119 +1,87 @@
-# 04 - Setup Workflows Flow B (status)
+# 04 - Setup Workflows Flow B (status + `/queue` + `/who` + `/help`)
 
 ## Objetivo
-Procesar comandos de estado y mantener la cola consistente, incluyendo reinserción al volver de `busy` a `available`.
+Procesar comandos de estado y consultas operativas, manteniendo `queueOrder` consistente y auditando cada acción.
 
 ## Trigger
-
-- Microsoft Teams → `When a new channel message is added`
+- Microsoft Teams -> `When a new channel message is added`
 - Team: `<TU TEAM>`
-- Channel: `dispatch`
+- Channel: `dispatch` (o el configurado en `ConfigTable.allowedChannel`)
 
-## Variables iniciales
+## Variables
+- `vText`, `vSender`, `vNow`
+- `vCmd = toLower(trim(variables('vText')))`
 
-- `vText` (String): message content
-- `vSender` (String): display name del usuario
-- `vNow` (String):
+## Cargar ConfigTable
+- List rows `ConfigTable` -> `cConfigRow = first(...)`
+- `vHelpText = outputs('cConfigRow')?['helpText']`
 
+## Comandos soportados
+- Cambios de estado: `/available`, `/busy`, `/break`, `/lunch`, `/offline`
+- Consulta personal: `/status`
+- Consulta global: `/queue`, `/who`
+- Ayuda: `/help`
+
+Si no coincide con ninguno: `Terminate`.
+
+## Ramas de consulta
+### `/help`
+- Responder `vHelpText`
+- Log AuditTable `STATUS_QUERY` details=`help`
+
+### `/queue`
+- List rows `QueueTable`
+- Ordenar por `queueOrder` (mínimo iterativo)
+- Responder por línea: `Nombre | status | order=X | boost=Y`
+- Log `STATUS_QUERY` details=`queue`
+
+### `/who`
+- Filtrar `status=available`
+- Ordenar por `queueOrder`
+- Responder por línea: `Nombre | order=X | boost=Y`
+- Log `STATUS_QUERY` details=`who`
+
+### `/status`
+- Buscar fila por `displayName==vSender`
+- Responder: `Tu estado: {status} | queueOrder={queueOrder} | boost={boostMode}`
+- Log `STATUS_QUERY` details=`status-self`
+
+## Ramas de actualización de estado
+1. Buscar fila sender en `QueueTable`; si no existe:
+   - Responder `⚠️ No estás en cola. Contacta a un líder.`
+   - Log `STATUS_CHANGE` details=`sender-not-found`
+   - Terminate.
+
+2. Mapear `vNewStatus` desde comando.
+3. Guardar `vPreviousStatus`.
+4. Update row sender: `status=vNewStatus`, `lastUpdatedUtc=vNow`.
+
+## Regla busy -> available
+Condición:
 ```text
-utcNow()
-```
-
-- `vCmd` (String):
-
-```text
-toLower(trim(variables('vText')))
-```
-
-## Condition: comando válido
-
-```text
-or(
- equals(variables('vCmd'), '/available'),
- equals(variables('vCmd'), '/busy'),
- equals(variables('vCmd'), '/break'),
- equals(variables('vCmd'), '/lunch'),
- equals(variables('vCmd'), '/offline'),
- equals(variables('vCmd'), '/status')
-)
-```
-
-Si FALSE: `Terminate`.
-
-## Resolver `vNewStatus`
-
-Mapeo recomendado:
-
-- `/available` => `available`
-- `/busy` => `busy`
-- `/break` => `break`
-- `/lunch` => `lunch`
-- `/offline` => `offline`
-- `/status` => mantener estado actual (solo consulta)
-
-Puedes resolverlo con Switch o Condition anidada.
-
-## Lookup sender row
-
-1. List rows (`QueueTable`)
-2. Filter array:
-
-```text
-equals(item()?['displayName'], variables('vSender'))
-```
-
-3. Si none: responder
-
-```text
-⚠️ No estás en cola. Contacta a un líder.
-```
-
-Terminate.
-
-## Update estado
-
-Guarda `previousStatus = row.status`.
-
-Si `vCmd != '/status'`, actualizar:
-- `status = vNewStatus`
-- `lastUpdatedUtc = vNow`
-
-Si `vCmd == '/status'`, responder estado actual y terminar.
-
----
-
-## Reinserción `busy -> available`
-
-Condition:
-
-```text
-and(equals(toLower(previousStatus), 'busy'), equals(variables('vNewStatus'), 'available'))
+and(equals(toLower(variables('vPreviousStatus')), 'busy'), equals(variables('vNewStatus'), 'available'))
 ```
 
 Si TRUE:
-
-1. Construir lista ordenada por `queueOrder` (puedes usar Apply to each + selección mínima iterativa si no ordenas en origen).
-2. Remover al sender de la lista temporal.
-3. Definir índice de inserción según `boostMode` del sender:
-   - `normal` => `index = length(list)` (final)
-   - `double` => `index = div(length(list), 2)` (centro)
-4. Insertar sender en índice.
-5. Loop final para actualizar `queueOrder = 1..N` en Excel para todos los miembros.
-
-### Resultado en respuesta
-
+1. Remover sender de lista ordenada.
+2. Definir índice inserción:
+   - `boostMode=normal` -> final
+   - `boostMode=double` -> `div(length(lista), 2)`
+3. Insertar sender.
+4. Renumerar `queueOrder=1..N` para todos.
+5. Respuesta:
 ```text
-✅ Estado actualizado: {previousStatus} → available
-🔁 Reinsertado: final/centro
+✅ Estado actualizado: busy -> available | queueOrder={nuevo}
+🔁 Reinsertado: final|centro
 ```
 
-Si no aplica reinserción (ej. busy->break):
-
+Si FALSE:
 ```text
-✅ Estado actualizado: {previousStatus} → {vNewStatus}
+✅ Estado actualizado: {prev} -> {new} | queueOrder={actual}
 ```
 
-## TODO PR#2
-
-- Reglas avanzadas de prioridad por tags/skills.
-- Estrategias de reinserción adicionales.
+Siempre log:
+- `STATUS_CHANGE`
+- `actor=vSender`
+- `target=vSender`
+- `details=prev:{prev};new:{new};queueOrder:{orderFinal}`

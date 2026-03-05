@@ -1,233 +1,129 @@
-# 03 - Setup Workflows Flow A (`/next`)
+# 03 - Setup Workflows Flow A (`/next`, `/help`)
 
 ## Objetivo
-Procesar comandos `/next` enviados en Teams por líderes, asignar siguiente agente disponible y bloquear concurrencia con `LockTable`.
+Atender `/next`, `/next help` y `/help`, con lock robusto, tags estrictos, config dinámica y auditoría en todas las salidas.
 
 ## Trigger
+- Microsoft Teams -> `When a new channel message is added`
+- Team: `<TU TEAM>`
+- Channel: usa el canal de operación (ej. `dispatch`)
 
-- **Connector:** Microsoft Teams
-- **Trigger:** `When a new channel message is added`
-- **Team:** `<TU TEAM>`
-- **Channel:** `dispatch`
+## Variables iniciales
+1. `vText` (String) = texto del mensaje
+2. `vSender` (String) = display name remitente
+3. `vNow` (String) = `utcNow()`
+4. `vLockAcquired` (Boolean) = `false`
+5. `vFailReason` (String) = `''`
 
-## Variables iniciales (acciones exactas)
-
-1. **Initialize variable** `vText` (String)
-   - Value: contenido/body del mensaje.
-2. **Initialize variable** `vSender` (String)
-   - Value: From / User display name.
-3. **Initialize variable** `vNow` (String)
-   - Value (Expression):
-
+## Cargar ConfigTable (sin hardcode)
+1. List rows -> `ConfigTable`
+2. Compose `cConfigRow`:
 ```text
-utcNow()
+first(body('List_rows_ConfigTable')?['value'])
 ```
+3. Variables:
+- `vLeadersCsv` = `outputs('cConfigRow')?['leadersCsv']`
+- `vAllowedTagsCsv` = `toLower(outputs('cConfigRow')?['allowedTagsCsv'])`
+- `vHelpText` = `outputs('cConfigRow')?['helpText']`
+- `vLockTtlSeconds` = `int(outputs('cConfigRow')?['lockTtlSeconds'])`
 
-4. **Initialize variable** `vLeaders` (Array)
-   - Value:
+## Detectar comando
+`vTextLower = toLower(trim(variables('vText')))`
 
-```json
-["Randall","Eduardo","Jorge","Gabriel"]
-```
+- Si inicia con `/help` o es `/next help`: responder `vHelpText`, log `ASSIGN_FAIL` con details=`help-request`, terminar.
+- Si no inicia con `/next`: Terminate.
 
-5. **Initialize variable** `vIsNext` (Boolean)
-   - Value (Expression):
-
+## Validar líder
+Expresión:
 ```text
-startsWith(toLower(trim(variables('vText'))), '/next')
+contains(concat(',', toLower(variables('vLeadersCsv')), ','), concat(',', toLower(variables('vSender')), ','))
 ```
 
-## Condition: ¿es /next?
+Si false:
+- Responder `⛔ No tienes permiso para asignar tareas.`
+- Log `ASSIGN_FAIL` details=`unauthorized`
+- Terminate.
 
-- Condition: `vIsNext` equals `true`.
-- Si **false**: `Terminate`.
+## Parse de `/next`
+- `vFirstQuote = indexOf(variables('vText'), '"')`
+- `vLastQuote = lastIndexOf(variables('vText'), '"')`
 
-## Condition: Leader check
-
-Expression:
-
-```text
-contains(variables('vLeaders'), variables('vSender'))
-```
-
-- Si false: responder en canal:
-
-```text
-⛔ No tienes permiso para asignar tareas.
-```
-
-Luego `Terminate`.
-
----
-
-## Parse `/next` (copy/paste)
-
-### Validar comillas
-
-1. Initialize variable `vFirstQuote` (Integer)
-
-```text
-indexOf(variables('vText'), '"')
-```
-
-2. Initialize variable `vLastQuote` (Integer)
-
-```text
-lastIndexOf(variables('vText'), '"')
-```
-
-3. Condition:
-
+Condición error:
 ```text
 or(equals(variables('vFirstQuote'), -1), equals(variables('vLastQuote'), variables('vFirstQuote')))
 ```
 
-Si TRUE: responder
+Si error:
+- Responder `Formato inválido. Usa: /next df "nombre de la tarea"`
+- Log `ASSIGN_FAIL` details=`parse-error`
+- Terminate.
 
+Extraer:
+- `vPrefix = trim(substring(variables('vText'), 5, sub(variables('vFirstQuote'), 5)))`
+- `vTaskName = substring(variables('vText'), add(variables('vFirstQuote'),1), sub(variables('vLastQuote'), add(variables('vFirstQuote'),1)))`
+- `vTagsRaw = toLower(trim(variables('vPrefix')))`
+- `vTags = if(equals(variables('vTagsRaw'), ''), createArray(), split(variables('vTagsRaw'), ' '))`
+
+## Validación estricta de tags
+- Si `length(vTags)=0`: OK.
+- Si contiene `all`: forzar `vTags=["all"]`.
+- Si no contiene `all`: para cada tag no vacío validar contra `vAllowedTagsCsv`.
+
+Validación por tag:
 ```text
-Formato inválido. Usa: /next df "nombre de la tarea"
+contains(concat(',', variables('vAllowedTagsCsv'), ','), concat(',', item(), ','))
 ```
 
-Luego `Terminate`.
+Si alguno inválido:
+- Responder `❌ Tags inválidos. Usa: df dl inv act all`
+- Log `ASSIGN_FAIL` details=`invalid-tags`
+- Terminate.
 
-### Extraer prefix (tags raw)
-
-Initialize variable `vPrefix` (String):
-
-```text
-trim(substring(variables('vText'), 5, sub(variables('vFirstQuote'), 5)))
-```
-
-### Extraer taskName
-
-Initialize variable `vTaskName` (String):
-
-```text
-substring(variables('vText'), add(variables('vFirstQuote'), 1), sub(variables('vLastQuote'), add(variables('vFirstQuote'), 1)))
-```
-
-### Normalizar tags list
-
-Initialize variable `vTagsRaw` (String):
-
-```text
-toLower(trim(variables('vPrefix')))
-```
-
-Initialize variable `vTags` (Array):
-
-```text
-if(
-  equals(variables('vTagsRaw'), ''),
-  createArray(),
-  split(variables('vTagsRaw'), ' ')
-)
-```
-
-> Nota: si aparecen tokens vacíos por espacios múltiples, puedes ignorarlos manualmente en lógica posterior.
-
-Condition:
-
-```text
-contains(variables('vTags'), 'all')
-```
-
-Si true, **Set variable** `vTags` a:
-
-```json
-["all"]
-```
-
----
-
-## Lock acquire con `LockTable`
-
-1. Excel Online (Business) → **List rows present in a table**
-   - File: `dispatcher.xlsx`
-   - Table: `LockTable`
-
-2. Compose `cLockRow`:
-
-```text
-first(body('List_rows_present_in_a_table')?['value'])
-```
-
-3. Initialize variable `vLockUntil` (String):
-
-```text
-coalesce(outputs('cLockRow')?['lockUntilUtc'], '1970-01-01T00:00:00Z')
-```
-
-4. Condition lock free?:
-
+## Lock robusto con retry (2x, 2s)
+Intento 1:
+1. Leer `LockTable`.
+2. `vLockUntil = coalesce(lockUntilUtc, '1970-01-01T00:00:00Z')`
+3. Libre si:
 ```text
 greaterOrEquals(ticks(variables('vNow')), ticks(variables('vLockUntil')))
 ```
+4. Si libre -> Update lock (`lockOwner=vSender`, `lockUntilUtc=addSeconds(vNow,vLockTtlSeconds)`, `lockRowVersion+1`) y `vLockAcquired=true`.
 
-- Si FALSE: responder
+Si ocupado:
+- `Delay` 2s y repetir intento (hasta 2 reintentos).
+- Si sigue ocupado al final:
+  - Responder `⏳ Bot ocupado, intenta de nuevo`
+  - Log `ASSIGN_FAIL` details=`lock-busy-after-retry`
+  - Terminate.
 
-```text
-⏳ Bot ocupado, intenta de nuevo
-```
-
-`Terminate`.
-
-- Si TRUE: **Update lock row**
-  - `lockOwner = vSender`
-  - `lockUntilUtc = addSeconds(vNow, 20)`
-  - `lockRowVersion = add(int(lockRowVersion), 1)`
-
----
-
-## Leer `QueueTable` y elegir siguiente
-
-1. Excel → List rows (`QueueTable`)
-2. Filter array (eligible):
-   - From: `value`
-   - Condition:
-
-```text
-equals(toLower(item()?['status']), 'available')
-```
-
-3. Si `length(eligible) == 0`:
-   - Reply: no hay agentes disponibles
-   - Release lock (poner `lockUntilUtc=1970-01-01T00:00:00Z`)
-   - Terminate
-
-4. Inicializar:
-   - `vMinOrder = 9999` (Integer)
-   - `vSelectedName = ""` (String)
-   - `vSelectedRowId = ""` (String)
-
-5. Apply to each (eligible):
-   - Condition:
-
-```text
-less(int(item()?['queueOrder']), variables('vMinOrder'))
-```
-
-Si true:
-- `Set vMinOrder = int(item()?['queueOrder'])`
-- `Set vSelectedName = item()?['displayName']`
-- `Set vSelectedRowId = item()?['id']` (o key alternativa)
-
-6. Update selected row en Excel:
-   - `status = busy`
-   - `lastUpdatedUtc = vNow`
-
-7. Post message:
-
+## Selección y asignación
+1. List rows `QueueTable`
+2. Filtrar `status=available`
+3. Si vacío:
+   - Responder `⚠️ No hay agentes disponibles en este momento.`
+   - Log `ASSIGN_FAIL` details=`no-available`
+   - Ir a bloque Finally.
+4. Elegir menor `queueOrder`
+5. Update row seleccionado:
+   - `status=busy`
+   - `lastUpdatedUtc=vNow`
+6. Responder:
 ```text
 ✅ Asignado a: {vSelectedName} | 📌 {vTaskName}
 ```
+7. Log `ASSIGN_OK` (`actor=vSender`, `target=vSelectedName`, `taskName=vTaskName`, `tags=join(vTags,',')`, `details=assigned`).
 
-8. Release lock:
-   - Update lock row: `lockUntilUtc = 1970-01-01T00:00:00Z`
+## Finally pattern (release lock SIEMPRE)
+Agrega un Scope `Finally_ReleaseLock` configurado para ejecutarse **siempre** (success, fail, timeout, skipped del scope principal):
+- Si `vLockAcquired=true`, actualizar `LockTable`:
+  - `lockOwner=''`
+  - `lockUntilUtc='1970-01-01T00:00:00Z'`
+  - `lockRowVersion+1`
 
-## Mensajes sugeridos de error
-
-- Parse inválido: `Formato inválido. Usa: /next df "nombre de la tarea"`
-- No autorizado: `⛔ No tienes permiso para asignar tareas.`
-- Sin disponibles: `⚠️ No hay agentes disponibles en este momento.`
-- Lock ocupado: `⏳ Bot ocupado, intenta de nuevo`
+## Respuestas estándar
+- Éxito: `✅ Asignado a: ...`
+- No autorizado: `⛔ ...`
+- Parse error: `Formato inválido...`
+- Tags inválidos: `❌ Tags inválidos...`
+- Lock ocupado: `⏳ Bot ocupado...`
+- Sin disponibles: `⚠️ No hay agentes disponibles...`

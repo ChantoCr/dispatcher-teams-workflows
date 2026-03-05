@@ -1,41 +1,45 @@
 # Dispatcher Teams Workflows
 
-Implementación completa de un **dispatcher de tareas en Microsoft Teams** usando **Power Automate Workflows + Excel Online (Business)**, lista para reconstruir desde cero con instrucciones copy/paste.
+Implementación completa de un **dispatcher de tareas en Microsoft Teams** usando **Power Automate Workflows + Excel Online (Business)**, lista para reconstruir desde cero sin servidor.
 
 ## Qué hace
 
-Este repo implementa dos flujos principales:
+Este repo implementa tres flujos:
 
-1. **Flow A (`/next`)**
+1. **Flow A (`/next`, `/help`)**
    - Solo líderes pueden pedir la siguiente asignación.
-   - Selecciona el siguiente agente por menor `queueOrder` entre los `available`.
-   - Marca al agente asignado como `busy`.
-   - Publica respuesta en Teams con el asignado y la tarea.
-   - Usa bloqueo con `LockTable` (TTL 20s) para evitar colisiones.
+   - Toma configuración dinámica desde `ConfigTable` (líderes, TTL lock, canal, tags permitidos, help).
+   - Valida tags estrictamente (`df`, `dl`, `inv`, `act`, `all`).
+   - Usa lock con retry (2 intentos con delay de 2s).
+   - Siempre registra auditoría (`AuditTable`) en éxito y error.
 
-2. **Flow B (cambios de estado)**
-   - Cualquier agente puede usar: `/available`, `/busy`, `/break`, `/lunch`, `/offline`, `/status`.
-   - Actualiza estado en `QueueTable`.
-   - Si transición es `busy -> available`, reinsertar en cola:
-     - `boostMode=normal` => final.
-     - `boostMode=double` => centro.
-   - Normaliza `queueOrder` de 1..N.
+2. **Flow B (status + consultas)**
+   - Comandos: `/available`, `/busy`, `/break`, `/lunch`, `/offline`, `/status`, `/queue`, `/who`, `/help`.
+   - Mantiene cola y reinserta `busy -> available` (normal al final, double al centro).
+   - Normaliza `queueOrder` 1..N.
+   - Siempre registra auditoría (`STATUS_CHANGE`, `STATUS_QUERY`).
+
+3. **Flow C (`/admin ...`)**
+   - Solo líderes (desde `ConfigTable.leadersCsv`).
+   - Administración operativa sin tocar el flujo:
+     - `/admin add "Nombre"`
+     - `/admin remove "Nombre"`
+     - `/admin boost "Nombre" normal|double`
+     - `/admin reset`
+     - `/admin leaders set "csv"`
+     - `/admin config show`
+   - Toda acción queda en `AuditTable` (`eventType=ADMIN`).
 
 ## Arquitectura
 
 `Teams (canal dispatch) -> Power Automate Workflows -> Excel Online (dispatcher.xlsx) -> Teams (respuesta)`
 
-- Teams recibe comandos de texto.
-- Workflows ejecuta lógica y validaciones.
-- Excel guarda estado de cola y lock.
-- Teams recibe confirmaciones/errores.
-
 ## Requisitos
 
 - Microsoft Teams con **Workflows habilitado**.
 - Conector **Excel Online (Business)** activo en Power Automate.
-- Archivo Excel compartido con permisos de lectura/escritura para la cuenta que ejecuta los flows.
-- Tabla `QueueTable` y `LockTable` configuradas exactamente como se describe en docs.
+- Archivo Excel compartido con permisos de lectura/escritura para la cuenta de ejecución.
+- Tablas configuradas: `QueueTable`, `LockTable`, `ConfigTable`, `AuditTable`.
 
 ## Setup en orden
 
@@ -43,48 +47,30 @@ Este repo implementa dos flujos principales:
 2. [docs/02_SETUP_EXCEL.md](docs/02_SETUP_EXCEL.md)
 3. [docs/03_SETUP_WORKFLOWS_FLOW_A_NEXT.md](docs/03_SETUP_WORKFLOWS_FLOW_A_NEXT.md)
 4. [docs/04_SETUP_WORKFLOWS_FLOW_B_STATUS.md](docs/04_SETUP_WORKFLOWS_FLOW_B_STATUS.md)
-5. [docs/05_TEST_PLAN.md](docs/05_TEST_PLAN.md)
+5. [docs/06_SETUP_WORKFLOWS_FLOW_C_ADMIN.md](docs/06_SETUP_WORKFLOWS_FLOW_C_ADMIN.md)
+6. [docs/05_TEST_PLAN.md](docs/05_TEST_PLAN.md)
+7. [docs/07_SECURITY_AND_GOVERNANCE.md](docs/07_SECURITY_AND_GOVERNANCE.md)
+8. [docs/08_OPERATIONS_RUNBOOK.md](docs/08_OPERATIONS_RUNBOOK.md)
 
 ## Comandos disponibles
 
 - `/next [tags opcionales] "nombre de la tarea"` (solo líderes)
-- `/available`
-- `/busy`
-- `/break`
-- `/lunch`
-- `/offline`
-- `/status`
+- `/help`
+- `/next help`
+- `/available`, `/busy`, `/break`, `/lunch`, `/offline`, `/status`
+- `/queue`
+- `/who`
+- `/admin ...` (solo líderes)
 
 Ejemplos completos: [assets/examples/commands.md](assets/examples/commands.md)
 
+## Observabilidad
+
+- `AuditTable` registra: `ASSIGN_OK`, `ASSIGN_FAIL`, `STATUS_CHANGE`, `STATUS_QUERY`, `ADMIN`.
+- Cada respuesta de error debe dejar evidencia con `details` para soporte.
+
 ## Limitaciones conocidas
 
-- Excel no es una base de datos transaccional; el lock reduce colisiones pero no reemplaza un motor ACID.
-- El parseo de tags en `/next` es simple (split por espacio).
-- No hay sorting nativo en List Rows de Excel: se selecciona mínimo `queueOrder` manualmente.
-- Adaptive Cards incluidas son opcionales; el sistema funciona 100% con texto plano.
-
-## Checklist rápido de pruebas
-
-- [ ] Líder ejecuta `/next df "Revisar ticket #123"` y asigna correctamente.
-- [ ] Usuario no líder intenta `/next` y recibe rechazo.
-- [ ] `/next` mal formado (sin comillas) devuelve error de formato.
-- [ ] `LockTable` bloquea concurrencia y devuelve `⏳ Bot ocupado, intenta de nuevo`.
-- [ ] `/busy`, `/break`, `/lunch`, `/offline` actualizan estado.
-- [ ] `busy -> available` reinserta según `boostMode` y normaliza `queueOrder`.
-- [ ] `/status` responde estado actual del usuario.
-- [ ] Sin disponibles: líder recibe mensaje de no disponibilidad.
-
-## Estructura del repo
-
-```text
-dispatcher-teams-workflows/
-  AGENTS.md
-  README.md
-  .gitignore
-  .env.example
-  docs/
-  skills/
-  assets/
-  tools/
-```
+- Excel no es transaccional; el lock reduce colisiones, no reemplaza una BD ACID.
+- Los nombres en Teams deben coincidir con `displayName` de `QueueTable`.
+- Adaptive Cards son opcionales; texto plano cubre todo.
